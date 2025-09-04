@@ -28,7 +28,7 @@ calendar = namespace.GetDefaultFolder(9)  # 9 = Calendar
 now = datetime.now(timezone.utc)
 
 start_str = "08/25/2025" # Change this for each run, typically a Monday
-end_str = "08/30/2025"   # Change this for each run, typically a Saturday
+end_str = "08/29/2025"   # Change this for each run, typically a Saturday
 # Example: For week of Aug 26 to Aug 31, 2024   
 
 start = tart = datetime.strptime(start_str, "%m/%d/%Y").replace(tzinfo=timezone.utc)    # Change to desired start date
