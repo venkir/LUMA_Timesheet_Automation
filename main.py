@@ -4,7 +4,7 @@
 # Filter meetings by title
 # Extract date, duration, and agenda
 # Write to CSV with static fields
-# Generate fibonaci numbers upto 50
+
 import requests
 import pandas as pd
 from datetime import datetime, timedelta, timezone
