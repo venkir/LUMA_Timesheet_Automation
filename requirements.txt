@@ -3,3 +3,4 @@ requests
 pandas
 openpyxl
 pywin32
+Office365-REST-Python-Client
