@@ -1,19 +1,16 @@
+# Microsoft Graph API integration
 
-# Connect to Outlook using win32com client and fetch meetings with a known and fixed title
-# Filter meetings by title
-# Extract date, duration, and agenda
-# Write to CSV with static fields
-# 9/2/2025: V1.0 | Initial Draft
-# 9/3/2025: V1.1 | Added error handling for missing meetings in the date range
-# 9/4/2025: V1.2 | Added check for no meetings found, adding static text to all entries, checking if csv file is open and exiting gracefully, plus append the list of common meetings
-
+import configparser
 import requests
+import msal
 import pandas as pd
 from datetime import datetime, timedelta, timezone
-import win32com.client
-from msal import ConfidentialClientApplication
+import json
 import os
 import sys
+
+from bs4 import BeautifulSoup, Comment
+
 
 def check_if_file_open(file_path):
     try:
@@ -28,22 +25,59 @@ def check_if_file_open(file_path):
         print(f"An unexpected error occurred: {e}")
         sys.exit(1)
 
+# Load the configuration file
+config = configparser.ConfigParser()
+config.read('config.ini')
+
+# Outlook Access values
+DISPLAY_NAME = config['Outlook']['DISPLAY_NAME']
+CLIENT_ID = config['Outlook']['CLIENT_ID']
+OBJECT_ID = config['Outlook']['OBJECT_ID']
+TENANT_ID = config['Outlook']['TENANT_ID']
+CLIENT_SECRET = config['Outlook']['SECRET_KEY']
+SECRET_ID = config['Outlook']['SECRET_ID']
+EXPIRY_DATE = config['Outlook']['EXPIRY_DATE']
+
+# Personal Info values
+EMPLOYEE_NAME = config['Personal']['EMPLOYEE_NAME']
+IDENTIFIER = config['Personal']['IDENTIFIER']   
+POSITION = config['Personal']['POSITION']
+PROJECT_ID = config['Personal']['PROJECT_ID']
+TASK_CODE = config['Personal']['TASK_CODE']
+CLIENT_KEYWORD = config['Personal']['CLIENT_KEYWORD']
+SITE = config['Personal']['SITE']
+user_id = config['Personal']['EMAIL_ID']
 # === Static Info ===
-EMPLOYEE_NAME = "Venki Ramachandran"
-IDENTIFIER = "CG11"
-POSITION = "Industry Subject Matter Expert (SMS)"
-PROJECT_ID = "14F000000000"
-TASK_CODE = "A3403"
-CLIENT_KEYWORD = "LUMA Timesheet Entry"
-SITE = "OffIsland"
 STATIC_TEXT = "This is  in support to the Project implementation for the Advanced Metering Infrastructure (AMI) - Technical Integration Services for Outage Management System (OMS), \
     Geographic Information System (GIS), and Customer Emergency Management System (CEMS) as per contract 2025-L00157 related to Request for Proposal 183353"
-MEETING_LIST_FILE_NAME = "https://capgemininar.sharepoint.com/:x:/r/sites/CGinternalLUMASmartMeterProject/_layouts/15/Doc.aspx?sourcedoc=%7B764391CB-55AC-4420-A938-A381937BD97C%7D&file=Venki%20Ramachandran%20Task%20Excel%20for%20Milestone%20Invoicing-3rd%20Invoice.xlsx&action=default&mobileredirect=true"
 
-# Connect to Outlook
-outlook = win32com.client.Dispatch("Outlook.Application")
-namespace = outlook.GetNamespace("MAPI")
-calendar = namespace.GetDefaultFolder(9)  # 9 = Calendar
+#print(f"Client id : {CLIENT_ID}")
+
+from azure.identity import DeviceCodeCredential
+from msgraph import GraphServiceClient
+
+
+# Microsoft Graph endpoints
+AUTHORITY = f'https://login.microsoftonline.com/{TENANT_ID}'
+SCOPE = ['https://graph.microsoft.com/.default']
+GRAPH_ENDPOINT = 'https://graph.microsoft.com/v1.0'
+
+# Create a confidential client
+app = msal.ConfidentialClientApplication(
+    CLIENT_ID,
+    authority=AUTHORITY,
+    client_credential=CLIENT_SECRET
+)
+
+# Acquire token
+token_response = app.acquire_token_for_client(scopes=SCOPE)
+access_token = token_response.get('access_token')
+
+# Define headers
+headers = {
+    'Authorization': f'Bearer {access_token}',
+    'Content-Type': 'application/json'
+}
 
 # Define time range
 now = datetime.now(timezone.utc)
@@ -52,58 +86,87 @@ start_str = "08/25/2025" # Change this for each run, typically a Monday
 end_str = "08/29/2025"   # Change this for each run, typically a Saturday
 # Example: For week of Aug 26 to Aug 31, 2024   
 
-start = tart = datetime.strptime(start_str, "%m/%d/%Y").replace(tzinfo=timezone.utc)    # Change to desired start date
-end = tart = datetime.strptime(end_str, "%m/%d/%Y").replace(tzinfo=timezone.utc)     # Change to desired end date
 
+# Convert to ISO 8601 format with UTC timezone
+start_date = datetime.strptime(start_str, "%m/%d/%Y").replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z")
+end_date = datetime.strptime(end_str, "%m/%d/%Y").replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z")
 
-# Sort and restrict items
-appointments = calendar.Items
-appointments.Sort("[Start]")
-appointments.IncludeRecurrences = True
-
-# Restrict to time range
-restriction = f"[Start] >= '{start.strftime('%m/%d/%Y %H:%M %p')}' AND [End] <= '{end.strftime('%m/%d/%Y %H:%M %p')}'"
-restricted_items = appointments.Restrict(restriction)
+# Build the URL correctly
+url = f"{GRAPH_ENDPOINT}/users/{user_id}/calendarView?startDateTime={start_date}&endDateTime={end_date}"
+params = {
+    '$orderby': 'start/dateTime',
+    '$top': 100
+}
+response = requests.get(url, headers=headers, params=params)
 
 # Process filtered appointments
 timesheet = []
 max_items = 100  # Safety limit
 count = 0
 
-for appt in restricted_items:
-    if count >= max_items:
-        break
-    count += 1
+if response.status_code == 200:
+    events = response.json().get('value', [])
+    #filtered_events = [event for event in events if event['subject'].strip().lower() == CLIENT_KEYWORD.lower()]
+    filtered_events = [event for event in events if event['subject'].strip() == 'LUMA Timesheet Entry']
+    for event in filtered_events:
+        start_time_str = event['start']['dateTime']
+        end_time_str = event['end']['dateTime']
+        # Convert to datetime objects
+        start_time = datetime.fromisoformat(start_time_str)
+        end_time = datetime.fromisoformat(end_time_str)
 
-    try:
-        if CLIENT_KEYWORD.lower() in appt.Subject.lower():
-            start_time = appt.Start
-            end_time = appt.End
-            duration = (end_time - start_time).total_seconds() / 3600
-            agenda = appt.Body.strip() if appt.Body else "No agenda provided"
+        duration = (end_time - start_time).total_seconds() / 3600
+        # Extract agenda from event body
+        html_content = event.get('body', {}).get('content', '')
 
-            timesheet.append({
+        # Parse and clean HTML
+        soup = BeautifulSoup(html_content, 'html.parser')
+
+        # Remove style and script tags
+        for tag in soup(['style', 'script']):
+            tag.decompose()
+
+        # Remove HTML comments
+        for comment in soup.find_all(string=lambda text: isinstance(text, Comment)):
+            comment.extract()
+
+        # Get clean text
+        agenda = soup.get_text(separator=' ', strip=True)
+
+        timesheet.append({
             "Name": EMPLOYEE_NAME,
             "Identifier": IDENTIFIER,
             "Position": POSITION,
-            "Date": appt.Start.date().isoformat(),
+            "Date": start_time.date().isoformat(),
             "Site": SITE,
             "Hours": round(duration, 2),
             "PROJECT_ID": PROJECT_ID,
             "Task Code": TASK_CODE, 
-            "Task Description": appt.Body.strip() + " " + STATIC_TEXT
-        })         
-    except Exception as e:
-        print(f"⚠️ Skipped an appointment due to error: {e}")
+            "Task Description": agenda + " " + STATIC_TEXT
+        })
+else:
+    print(f"Error: {response.status_code}")
+    print(response.text)
 
 # Export to CSV
 timesheet_df = pd.DataFrame(timesheet)
+# Check if we got any appointments from Outlook
+if timesheet_df.empty:
+    err_msg = f"❌ Error: No Events found in your Calendar with title '{CLIENT_KEYWORD}' from: {start_str} to {end_str}. Please check."
+    print(err_msg)
+    sys.exit()
+else:
+    print(f"Total appointments found in date range: {len(timesheet_df)}")
 
 # Download from SharePoint and save it locally as Common_Meeting_List.xlsx
 meetings_file_name = r"C:\Users\venramac\Downloads\Common_Meeting_List.xlsx"
 # Read the file and print locally
 meetings_df = pd.read_excel(meetings_file_name, usecols=["Date", "Hours", "Concate of all Required fields"], sheet_name="Meeting List", engine="openpyxl")
 #print("Printing the top few lines from the meeting list file:")
+if meetings_df.empty:
+    err_msg = f"❌ Error: No Common meeting List File: {meetings_file_name} found. Please check its location and name."
+    print(err_msg)
+    sys.exit()
 
 # Since the neetings list has onlt three columsn we are inbterested in and the rest are our personal details
 # Rename the last column to Task Description
@@ -114,7 +177,7 @@ meetings_df.rename(columns={"Concate of all Required fields": "Task Description"
 meetings_df_aligned = meetings_df.reindex(columns=timesheet_df.columns)
 # Strip time component from Date column
 meetings_df_aligned['Date'] = meetings_df_aligned['Date'].dt.date
-
+    
 # Append the two DataFrames
 result = pd.concat([timesheet_df, meetings_df_aligned], ignore_index=True)
 # Fill the NaN values with the default values
@@ -124,14 +187,11 @@ result['Position'] = result['Position'].fillna(POSITION)
 result['Site'] = result['Site'].fillna(SITE)
 result['PROJECT_ID'] = result['PROJECT_ID'].fillna(PROJECT_ID)
 result['Task Code'] = result['Task Code'].fillna(TASK_CODE)
-print(result.head(10))
+#print(result.head(10))
 
-# Check if the file is open before writing
+# Check if the file is open before writing or exit as this point
 check_if_file_open("timesheet_luma.csv")
 
-if timesheet_df.empty:
-    err_msg = f"❌ Error: No meetings found with title '{CLIENT_KEYWORD}' from: {start_str} to {end_str}. Please check your Outlook calendar and try again."
-    print(err_msg)
-else:
-    result.to_csv("timesheet_luma.csv", index=False)
-    print("✅ Timesheet exported to timesheet_luma.csv")
+# Print the result df to a CSV file
+result.to_csv("timesheet_luma.csv", index=False)
+print("✅ Timesheet exported to timesheet_luma.csv")

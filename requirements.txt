@@ -1,6 +1,11 @@
 msal
 requests
+configparser
 pandas
 openpyxl
 pywin32
-Office365-REST-Python-Client
+bs4
+jason
+os
+sys
+datetime
