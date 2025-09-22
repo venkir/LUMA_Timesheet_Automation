@@ -37,6 +37,7 @@ TENANT_ID = config['Outlook']['TENANT_ID']
 CLIENT_SECRET = config['Outlook']['SECRET_KEY']
 SECRET_ID = config['Outlook']['SECRET_ID']
 EXPIRY_DATE = config['Outlook']['EXPIRY_DATE']
+meetings_file_name = config['Files']['meetings_file_name'].strip('"')
 
 # Personal Info values
 EMPLOYEE_NAME = config['Personal']['EMPLOYEE_NAME']
@@ -158,8 +159,7 @@ if timesheet_df.empty:
 else:
     print(f"Total appointments found in date range: {len(timesheet_df)}")
 
-# Download from SharePoint and save it locally as Common_Meeting_List.xlsx
-meetings_file_name = r"C:\Users\venramac\Downloads\Common_Meeting_List.xlsx"
+
 # Read the file and print locally
 meetings_df = pd.read_excel(meetings_file_name, usecols=["Date", "Hours", "Concate of all Required fields"], sheet_name="Meeting List", engine="openpyxl")
 #print("Printing the top few lines from the meeting list file:")
