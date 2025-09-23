@@ -1,5 +1,13 @@
-# Microsoft Graph API integration
-
+# Connect to Outlook using Microsoft Graph API and fetch meetings with "LUMA" in the title
+# Authenticate with Microsoft Graph
+# Filter meetings by title
+# Extract date, duration, and agenda
+# Write to CSV with static fields
+# Venki: 09/23/25: Sharepoint Integration done. Go to 'Timesheet ..' folder in Sharepoint folder, click on 3 dots, click on Sync
+#                : Added the very long common meeting xlsx file with spaces and double back slashes in the config.ini file
+#                : Remove rows where the concatenated field 'Task Description' from Common Meeting List is empty after appending
+#                : Input Dates are 4 months apart, so fetch all meetings in that range and changed filter to provide top 1000 meetings
+#                : Added another paramter to the config file to create the final timesheet csv file in the same folder as the common meeting list file
 import configparser
 import requests
 import msal
@@ -83,10 +91,10 @@ headers = {
 # Define time range
 now = datetime.now(timezone.utc)
 
-start_str = "08/25/2025" # Change this for each run, typically a Monday
-end_str = "08/29/2025"   # Change this for each run, typically a Saturday
+start_str = "06/01/2025" # Change this for each run, typically a Monday
+end_str = "09/30/2025"   # Change this for each run, typically a Saturday
 # Example: For week of Aug 26 to Aug 31, 2024   
-
+print(f"Fetching calendar events from {start_str} to {end_str}")
 
 # Convert to ISO 8601 format with UTC timezone
 start_date = datetime.strptime(start_str, "%m/%d/%Y").replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z")
@@ -96,7 +104,7 @@ end_date = datetime.strptime(end_str, "%m/%d/%Y").replace(tzinfo=timezone.utc).i
 url = f"{GRAPH_ENDPOINT}/users/{user_id}/calendarView?startDateTime={start_date}&endDateTime={end_date}"
 params = {
     '$orderby': 'start/dateTime',
-    '$top': 100
+    '$top': 1000
 }
 response = requests.get(url, headers=headers, params=params)
 
@@ -187,11 +195,21 @@ result['Position'] = result['Position'].fillna(POSITION)
 result['Site'] = result['Site'].fillna(SITE)
 result['PROJECT_ID'] = result['PROJECT_ID'].fillna(PROJECT_ID)
 result['Task Code'] = result['Task Code'].fillna(TASK_CODE)
+# Drop all rows where Date or Task Description is NaN
+result = result.dropna(subset=['Task Description'])
 #print(result.head(10))
 
-# Check if the file is open before writing or exit as this point
-check_if_file_open("timesheet_luma.csv")
+# Create the output CSV file path
+output_csv_dir = config['Files']['output_csv_dir'].strip('"')
+output_csv_file_name = os.path.join(output_csv_dir, EMPLOYEE_NAME.replace(" ", "_") + "_Timesheet_3rd_Invoice.csv")
 
-# Print the result df to a CSV file
-result.to_csv("timesheet_luma.csv", index=False)
-print("✅ Timesheet exported to timesheet_luma.csv")
+# Check if the file is open before writing or exit as this point
+check_if_file_open(output_csv_file_name)
+
+# try to write the file
+try:
+    result.to_csv(output_csv_file_name, index=False)
+    if os.path.exists(output_csv_file_name):
+        print(f"✅ File '{output_csv_file_name}' created successfully.")
+except Exception as e:
+    print(f"❌ Failed to export timesheet: {e}")
