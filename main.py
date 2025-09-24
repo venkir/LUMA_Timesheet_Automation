@@ -98,7 +98,7 @@ headers = {
 now = datetime.now(timezone.utc)
 
 start_str = "03/27/2025" # Change this for each run, typically a Monday
-end_str = "03/28/2025"   # Change this for each run, typically a Saturday
+end_str = "03/29/2025"   # Change this for each run, typically a Saturday
 # Example: For week of Aug 26 to Aug 31, 2024   
 print(f"Fetching calendar events from {start_str} to {end_str}")
 
@@ -230,6 +230,11 @@ result['Task Code'] = result['Task Code'].fillna(TASK_CODE)
 # Drop all rows where Date or Task Description is NaN
 result = result.dropna(subset=['Task Description'])
 #print(result.head(10))
+
+
+# ✅ Sort all entries by Date
+result['Date'] = pd.to_datetime(result['Date'])
+result = result.sort_values(by='Date')
 
 # Create the output CSV file path
 output_csv_dir = config['Files']['output_csv_dir'].strip('"')
