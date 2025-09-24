@@ -8,6 +8,11 @@
 #                : Remove rows where the concatenated field 'Task Description' from Common Meeting List is empty after appending
 #                : Input Dates are 4 months apart, so fetch all meetings in that range and changed filter to provide top 1000 meetings
 #                : Added another parameter to the config file to create the final timesheet csv file in the same folder as the common meeting list file in SharePoint
+
+# Gokul: 09/24/25 : Added logic for only those meetings should be included that are filtered by date range and employee name from the Meeting List Excel file.
+#                 : Remove Employee Name and position from the attendee list 
+#                 : Period before static text is appended
+
 import configparser
 import requests
 import msal
@@ -16,6 +21,7 @@ from datetime import datetime, timedelta, timezone
 import json
 import os
 import sys
+import re
 
 from bs4 import BeautifulSoup, Comment
 
@@ -91,8 +97,8 @@ headers = {
 # Define time range
 now = datetime.now(timezone.utc)
 
-start_str = "06/01/2025" # Change this for each run, typically a Monday
-end_str = "09/30/2025"   # Change this for each run, typically a Saturday
+start_str = "03/27/2025" # Change this for each run, typically a Monday
+end_str = "03/28/2025"   # Change this for each run, typically a Saturday
 # Example: For week of Aug 26 to Aug 31, 2024   
 print(f"Fetching calendar events from {start_str} to {end_str}")
 
@@ -151,7 +157,7 @@ if response.status_code == 200:
             "Hours": round(duration, 2),
             "PROJECT_ID": PROJECT_ID,
             "Task Code": TASK_CODE, 
-            "Task Description": agenda + " " + STATIC_TEXT
+            "Task Description": (agenda.strip() + "." if not agenda.strip().endswith(".") else agenda.strip()) + " " + STATIC_TEXT
         })
 else:
     print(f"Error: {response.status_code}")
@@ -168,6 +174,11 @@ else:
     print(f"Total appointments found in date range: {len(timesheet_df)}")
 
 
+# Convert start and end date strings to date objects
+start_date_obj = datetime.strptime(start_str, "%m/%d/%Y").date()
+end_date_obj = datetime.strptime(end_str, "%m/%d/%Y").date()
+
+
 # Read the file and print locally
 meetings_df = pd.read_excel(meetings_file_name, usecols=["Date", "Hours", "Concate of all Required fields"], sheet_name="Meeting List", engine="openpyxl")
 #print("Printing the top few lines from the meeting list file:")
@@ -181,10 +192,31 @@ if meetings_df.empty:
 meetings_df.rename(columns={"Concate of all Required fields": "Task Description"}, inplace=True)
 #print(meetings_df.head())
 # 
+
+# Convert date column to date type
+meetings_df['Date'] = pd.to_datetime(meetings_df['Date']).dt.date
+
+# ✅ Filter by date range and attendee name
+meetings_df = meetings_df[
+    (meetings_df['Date'] >= start_date_obj) &
+    (meetings_df['Date'] <= end_date_obj) &
+    (meetings_df["Task Description"].str.contains(EMPLOYEE_NAME, case=False, na=False))
+]
+
+# Function to remove EMPLOYEE_NAME and position from Task Description
+def remove_employee_from_task_description(text):
+    if pd.isna(text):
+        return text
+    pattern = rf"{EMPLOYEE_NAME}[^;]*;\s*"
+    return re.sub(pattern, "", text)
+
+meetings_df["Task Description"] = meetings_df["Task Description"].apply(remove_employee_from_task_description)
+    
+
 # Ensure df2 has all columns of df1
 meetings_df_aligned = meetings_df.reindex(columns=timesheet_df.columns)
 # Strip time component from Date column
-meetings_df_aligned['Date'] = meetings_df_aligned['Date'].dt.date
+#meetings_df_aligned['Date'] = meetings_df_aligned['Date'].dt.date
     
 # Append the two DataFrames
 result = pd.concat([timesheet_df, meetings_df_aligned], ignore_index=True)
