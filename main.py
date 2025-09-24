@@ -3,11 +3,11 @@
 # Filter meetings by title
 # Extract date, duration, and agenda
 # Write to CSV with static fields
-# Venki: 09/23/25: Sharepoint Integration done. Go to 'Timesheet ..' folder in Sharepoint folder, click on 3 dots, click on Sync
+# Venki: 09/23/25: SharePoint Integration done. Go to 'Timesheet ..' folder in SharePoint folder, click on 3 dots, click on Sync
 #                : Added the very long common meeting xlsx file with spaces and double back slashes in the config.ini file
 #                : Remove rows where the concatenated field 'Task Description' from Common Meeting List is empty after appending
 #                : Input Dates are 4 months apart, so fetch all meetings in that range and changed filter to provide top 1000 meetings
-#                : Added another paramter to the config file to create the final timesheet csv file in the same folder as the common meeting list file
+#                : Added another parameter to the config file to create the final timesheet csv file in the same folder as the common meeting list file in SharePoint
 import configparser
 import requests
 import msal
