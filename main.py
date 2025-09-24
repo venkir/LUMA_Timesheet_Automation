@@ -13,6 +13,7 @@
 #                 : Remove Employee Name and position from the attendee list 
 #                 : Period before static text is appended
 #                 : Added DateTime sorting so that each day task should comes one after another
+# Venki 09/24/2025: Move the start and end date to config.ini, as well as the Invoice number (used to create the output file name )
 
 import configparser
 import requests
@@ -52,7 +53,14 @@ TENANT_ID = config['Outlook']['TENANT_ID']
 CLIENT_SECRET = config['Outlook']['SECRET_KEY']
 SECRET_ID = config['Outlook']['SECRET_ID']
 EXPIRY_DATE = config['Outlook']['EXPIRY_DATE']
+
+# File paths
 meetings_file_name = config['Files']['meetings_file_name'].strip('"')
+
+# Team Info values
+INVOICE_NUM = config['Team']['INVOICE_NUM']
+START_DATE_STR = config['Team']['START_DATE_STR']   
+END_DATE_STR = config['Team']['END_DATE_STR']
 
 # Personal Info values
 EMPLOYEE_NAME = config['Personal']['EMPLOYEE_NAME']
@@ -65,9 +73,7 @@ SITE = config['Personal']['SITE']
 user_id = config['Personal']['EMAIL_ID']
 # === Static Info ===
 STATIC_TEXT = "This is  in support to the Project implementation for the Advanced Metering Infrastructure (AMI) - Technical Integration Services for Outage Management System (OMS), \
-    Geographic Information System (GIS), and Customer Emergency Management System (CEMS) as per contract 2025-L00157 related to Request for Proposal 183353"
-
-#print(f"Client id : {CLIENT_ID}")
+    Geographic Information System (GIS), and Customer Emergency Management System (CEMS) as per contract 2025-L00157 related to Request for Proposal 183353."
 
 from azure.identity import DeviceCodeCredential
 from msgraph import GraphServiceClient
@@ -98,8 +104,9 @@ headers = {
 # Define time range
 now = datetime.now(timezone.utc)
 
-start_str = "03/27/2025" # Change this for each run, typically a Monday
-end_str = "03/29/2025"   # Change this for each run, typically a Saturday
+# Use the dates from config file
+start_str = START_DATE_STR  # "06/01/2025" # Change this for each run, typically a Monday
+end_str = END_DATE_STR    # "09/30/2025"   # Change this for each run, typically a Saturday 
 # Example: For week of Aug 26 to Aug 31, 2024   
 print(f"Fetching calendar events from {start_str} to {end_str}")
 
@@ -239,7 +246,8 @@ result = result.sort_values(by='Date')
 
 # Create the output CSV file path
 output_csv_dir = config['Files']['output_csv_dir'].strip('"')
-output_csv_file_name = os.path.join(output_csv_dir, EMPLOYEE_NAME.replace(" ", "_") + "_Timesheet_3rd_Invoice.csv")
+# Use INVOICE_NUM from config file to create the output file name
+output_csv_file_name = os.path.join(output_csv_dir, EMPLOYEE_NAME.replace(" ", "_") + f"_Timesheet_for_Invoice#{INVOICE_NUM}.csv")
 
 # Check if the file is open before writing or exit as this point
 check_if_file_open(output_csv_file_name)
