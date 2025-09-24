@@ -12,6 +12,7 @@
 # Gokul: 09/24/25 : Added logic for only those meetings should be included that are filtered by date range and employee name from the Meeting List Excel file.
 #                 : Remove Employee Name and position from the attendee list 
 #                 : Period before static text is appended
+#                 : Added DateTime sorting so that each day task should comes one after another
 
 import configparser
 import requests
