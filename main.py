@@ -14,6 +14,11 @@
 #                 : Period before static text is appended
 #                 : Added DateTime sorting so that each day task should comes one after another
 # Venki 09/24/2025: Move the start and end date to config.ini, as well as the Invoice number (used to create the output file name )
+# Gokul: 09/25/2025: Add logic for 
+#                 : No acronyms in the tasks
+#                 : Meeting attendee list should not have name of person filling timecard
+#                 : No acronyms in the meeting attendee list designation
+#                 : Employee title with no abbreviation (position)
 
 import configparser
 import requests
@@ -24,7 +29,7 @@ import json
 import os
 import sys
 import re
-
+import html
 from bs4 import BeautifulSoup, Comment
 
 
@@ -248,6 +253,52 @@ result = result.sort_values(by='Date')
 output_csv_dir = config['Files']['output_csv_dir'].strip('"')
 # Use INVOICE_NUM from config file to create the output file name
 output_csv_file_name = os.path.join(output_csv_dir, EMPLOYEE_NAME.replace(" ", "_") + f"_Timesheet_for_Invoice#{INVOICE_NUM}.csv")
+
+# Read acronym mapping from the "Acronyms" sheet
+acronym_df = pd.read_excel(meetings_file_name, sheet_name="Acronyms", engine="openpyxl")
+acronym_map = dict(zip(acronym_df["Short Form"], acronym_df["Full Form"]))
+
+def replace_acronyms(text, acronym_map):
+    if pd.isna(text):
+        return text
+
+
+    for acronym, full_form in acronym_map.items():
+        
+# Skip replacing the specific expanded forms
+        skip_phrases = [
+            f"{acronym} ({full_form})",
+            f"{full_form} ({acronym})"
+        ]
+
+        # Temporarily protect skip phrases
+        for phrase in skip_phrases:
+            if phrase in text:
+                text = text.replace(phrase, f"__SKIP__{phrase}__")
+
+        # Explicit replacements for common punctuation cases
+        text = text.replace(f' {acronym} ', f' {full_form} ')
+        text = text.replace(f' {acronym};', f' {full_form};')
+        text = text.replace(f' {acronym}.', f' {full_form}.')
+        text = text.replace(f'.{acronym} ', f'.{full_form} ')
+        text = text.replace(f',{acronym} ', f',{full_form} ')
+        text = text.replace(f' {acronym},', f' {full_form},')
+        text = text.replace(f', {acronym} ', f', {full_form} ')
+        text = text.replace(f'. {acronym} ', f'. {full_form} ')
+        text = text.replace(f'-{acronym}', f'-{full_form}')
+        text = text.replace(f' {acronym}-', f' {full_form}-')
+        
+        
+# Restore protected phrases
+        for phrase in skip_phrases:
+            text = text.replace(f"__SKIP__{phrase}__", phrase)
+
+
+    return text
+
+# Apply to Task Description
+result["Task Description"] = result["Task Description"].apply(lambda x: replace_acronyms(x, acronym_map))
+
 
 # Check if the file is open before writing or exit as this point
 check_if_file_open(output_csv_file_name)
