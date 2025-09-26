@@ -161,6 +161,9 @@ if response.status_code == 200:
         # Get clean text
         agenda = soup.get_text(separator=' ', strip=True)
 
+        # Remove everything from the first long line of underscores onward
+        agenda = re.split(r'_{10,}', agenda)[0].strip()
+
         timesheet.append({
             "Name": EMPLOYEE_NAME,
             "Identifier": IDENTIFIER,
