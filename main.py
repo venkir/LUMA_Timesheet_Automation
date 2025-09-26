@@ -19,6 +19,8 @@
 #                 : Meeting attendee list should not have name of person filling timecard
 #                 : No acronyms in the meeting attendee list designation
 #                 : Employee title with no abbreviation (position)
+# Kritika 09/26/2025: Added logic for removing everything from the first long line of underscores onward(Microsoft team text)
+# Ram 09/26/2025: Added logic for removing ASCII characters. 
 
 import configparser
 import requests
