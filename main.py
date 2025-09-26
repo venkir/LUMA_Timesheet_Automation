@@ -31,6 +31,8 @@ import sys
 import re
 import html
 from bs4 import BeautifulSoup, Comment
+import unicodedata
+import html
 
 
 def check_if_file_open(file_path):
@@ -207,7 +209,16 @@ if meetings_df.empty:
 # Rename the last column to Task Description
 meetings_df.rename(columns={"Concate of all Required fields": "Task Description"}, inplace=True)
 #print(meetings_df.head())
-# 
+# Clean Task Description by removing ASCII characters and unwanted symbols
+def clean_task_description(text):
+    if pd.isna(text):
+        return ""
+    text = unicodedata.normalize("NFKD", str(text)).encode("ascii", "ignore").decode("utf-8", "ignore")
+    text = re.sub(r"[^a-zA-Z0-9\s.,:;-]", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+ 
+meetings_df["Task Description"] = meetings_df["Task Description"].apply(clean_task_description)
 
 # Convert date column to date type
 meetings_df['Date'] = pd.to_datetime(meetings_df['Date']).dt.date
